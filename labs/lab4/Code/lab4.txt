@@ -1,0 +1,61 @@
+Reference to the original reading: https://www.youtube.com/watch?v=ShNYW2e5ecQ
+
+Added for the VG part:
+- different voices
+- emotion
+- cicadas in the background
+
+
+
+<speak xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="http://www.w3.org/2001/mstts" xmlns:emo="http://www.w3.org/2009/10/emotionml" version="1.0" xml:lang="en-US">
+    <mstts:backgroundaudio src="https://drive.google.com/uc?export=download&amp;id=1vDpJD8eW9wwTQIdLjquRCNz9DjJPoh-E" volume="0.7" fadein="3000" fadeout="4000"/>
+
+    <voice name="en-US-AriaNeural">
+<prosody rate="-7%">
+        <prosody rate="-8%">
+            <prosody pitch="+10st">This </prosody> being human 
+        </prosody> 
+        is a <emphasis level="moderate">guest</emphasis> house 
+        <break time="300ms"/> 
+        <prosody rate="+5%">Every morning a
+            <emphasis level="reduced">new</emphasis> 
+        </prosody> 
+        <emphasis level="moderate">arrival</emphasis> 
+        <break time="200ms"/>
+</prosody> 
+    </voice>
+
+
+    <voice name="en-US-GuyNeural">
+        <mstts:express-as style="Cheerful"> A joy, </mstts:express-as>
+    </voice>
+
+    <voice name="en-US-DavisNeural">
+        <mstts:express-as style="Sad"> a depression, </mstts:express-as>
+    </voice>
+
+    <voice name="en-US-TonyNeural">
+        <prosody pitch="-3st">
+            <mstts:express-as style="Disgruntled"> a <emphasis level="moderate">meanness,</emphasis> </mstts:express-as>
+        </prosody>
+    </voice>
+
+    <voice name="en-US-JacobNeural">
+        some <prosody pitch="+5st"> momentary awareness </prosody>
+    </voice>
+
+    <voice name="en-US-AriaNeural">
+        <break time="100ms"/> 
+        <emphasis level="strong">comes</emphasis> 
+        <break time="200ms"/>
+        <prosody rate="-5%"> as an unexpected visitor. </prosody>
+        <break time="500ms"/> 
+        <emphasis level="strong">
+            <prosody pitch="+10st"> Welcome </prosody>
+        </emphasis> 
+        <break time="150ms"/> 
+        and entertain them  
+        <prosody pitch="-5st">all!</prosody>
+    </voice>
+
+</speak>

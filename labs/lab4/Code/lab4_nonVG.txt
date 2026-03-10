@@ -1,0 +1,52 @@
+Reference to the original reading: https://www.youtube.com/watch?v=ShNYW2e5ecQ
+For VG part see lab4.txt
+
+
+<!--ID=B7267351-473F-409D-9765-754A8EBCDE05;Version=1|{"VoiceNameToIdMapItems":[{"Id":"6c640df5-9977-4a98-b785-6b2195db0e3c","Name":"Microsoft Server Speech Text to Speech Voice (de-DE, SeraphinaMultilingualNeural)","ShortName":"de-DE-SeraphinaMultilingualNeural","Locale":"de-DE","VoiceType":"StandardVoice"}]}-->
+<!--ID=FCB40C2B-1F9F-4C26-B1A1-CF8E67BE07D1;Version=1|{"Files":{}}-->
+<!--ID=5B95B1CC-2C7B-494F-B746-CF22A0E779B7;Version=1|{"Locales":{"de-DE":{"AutoApplyCustomLexiconFiles":[{}]}}}-->
+<speak xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="http://www.w3.org/2001/mstts" xmlns:emo="http://www.w3.org/2009/10/emotionml" version="1.0" xml:lang="de-DE"><voice name="de-DE-SeraphinaMultilingualNeural">
+<prosody rate="-8%">
+<prosody pitch="+11st">
+This
+</prosody>
+being human
+</prosody>
+is a <emphasis level="moderate">guest</emphasis> house
+<break time="500ms"/>
+<prosody rate="+5%">
+Every morning a
+</prosody>
+<prosody rate="+7%">
+<emphasis level="reduced">new</emphasis>
+</prosody>
+<emphasis level="moderate">arrival</emphasis>
+<break time="200ms"/>
+<prosody pitch="+10st">A joy,</prosody>
+<break time="300ms"/>
+a depression, 
+<break time="200ms"/>
+<prosody pitch="-5st">
+a <emphasis level="moderate">meanness,</emphasis>
+</prosody>
+<break time="350ms"/>
+some 
+<prosody pitch="+8st">
+momentary awareness
+</prosody>
+<break time="100ms"/>
+<emphasis level="strong">comes</emphasis>
+<break time="200ms"/>
+<prosody rate="-5%">
+as an unexpected visitor.
+</prosody>
+<break time="500ms"/>
+<emphasis level="strong">
+<prosody pitch="+14st">
+Welcome
+</prosody>
+</emphasis>
+<break time="150ms"/>
+and entertain them <prosody pitch="-7st">all!</prosody>
+
+</voice></speak>

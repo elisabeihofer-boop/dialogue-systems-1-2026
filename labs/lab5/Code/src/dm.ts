@@ -2,50 +2,56 @@ import { assign, createActor, setup } from "xstate";
 import type { Settings } from "speechstate";
 import { speechstate } from "speechstate";
 import { createBrowserInspector } from "@statelyai/inspect";
-import { KEY } from "./azure";
-import type { DMContext, DMEvents } from "./types";
+import { KEY, NLU_KEY } from "./azure";
+import type { DMContext, NLUObject, DMEvents, Entity } from "./types"; // added NLUObject and Entity
 
 const inspector = createBrowserInspector();
 
 const azureCredentials = {
   endpoint:
-    "https://YOUR_REGION.api.cognitive.microsoft.com/sts/v1.0/issuetoken",
+    "https://swedencentral.api.cognitive.microsoft.com/sts/v1.0/issuetoken",
   key: KEY,
 };
 
+const azureLanguageCredentials = {
+  endpoint: "https://lab-gusbeihel.cognitiveservices.azure.com/language/:analyze-conversations?api-version=2024-11-15-preview" /** your Azure CLU prediction URL */,
+  key: NLU_KEY /** reference to your Azure CLU key */,
+  deploymentName: "appointment" /** your Azure CLU deployment */,
+  projectName: "lab-5" /** your Azure CLU project name */,
+  };
+
 const settings: Settings = {
+  azureLanguageCredentials: azureLanguageCredentials, //** global act
   azureCredentials: azureCredentials,
-  azureRegion: "YOUR_REGION",
+  azureRegion: "swedencentral",
   asrDefaultCompleteTimeout: 0,
   asrDefaultNoInputTimeout: 5000,
   locale: "en-US",
   ttsDefaultVoice: "en-US-DavisNeural",
 };
 
-interface GrammarEntry {
-  person?: string;
-  day?: string;
-  time?: string;
-}
-
-const grammar: { [index: string]: GrammarEntry } = {
-  vlad: { person: "Vladislav Maraev" },
-  bora: { person: "Bora Kara" },
-  tal: { person: "Talha Bedir" },
-  tom: { person: "Tom Södahl Bladsjö" },
-  monday: { day: "Monday" },
-  tuesday: { day: "Tuesday" },
-  "10": { time: "10:00" },
-  "11": { time: "11:00" },
+// helper function to get the entity
+function getEntity(nlu: NLUObject | null, category: string): string | undefined {
+  return nlu?.entities.find((e) => e.category === category)?.text;
 };
 
-function isInGrammar(utterance: string) {
-  return utterance.toLowerCase() in grammar;
-}
+// helper function to get yes / no answers
+function getYesNo(nlu: NLUObject | null): boolean | undefined {
+  const entity = nlu?.entities?.find(e => e.category === "YesNo");
+  if (!entity) return undefined;
 
-function getPerson(utterance: string) {
-  return (grammar[utterance.toLowerCase()] || {}).person;
-}
+  const value = entity.text.toLowerCase();
+
+  if (value.includes("yes")) return true;
+  if (value.includes("no")) return false;
+
+  return undefined;
+};
+
+// checking the confidence score for the intents
+function getIntentConfidence(nlu: NLUObject | null, intent: string): number {
+  return nlu?.intents.find(i => i.category === intent)?.confidenceScore ?? 0;
+};
 
 const dmMachine = setup({
   types: {
@@ -53,85 +59,337 @@ const dmMachine = setup({
     events: {} as DMEvents,
   },
   actions: {
-    "spst.speak": ({ context }, params: { utterance: string }) =>
+    "spst.speak": ({ context }, params: { utterance: string }) => {
       context.spstRef.send({
         type: "SPEAK",
-        value: {
-          utterance: params.utterance,
-        },
-      }),
+        value: { utterance: params.utterance },
+      });
+    },
     "spst.listen": ({ context }) =>
       context.spstRef.send({
         type: "LISTEN",
       }),
+    // Adding the NLU activation to "LISTEN"
+    "spst.listenNLU": ({ context }) => {
+      context.spstRef.send({
+        type: "LISTEN",
+        value: { nlu: true }, /** Local activation of NLU */
+      });
+    },
   },
 }).createMachine({
   context: ({ spawn }) => ({
     spstRef: spawn(speechstate, { input: settings }),
-    lastResult: null,
+
+    // Adding interpretation
+    interpretation: null,
+
+    person: undefined,
+    day: undefined,
+    time: undefined,
+    wholeDay: undefined,
+    confirmation: undefined,
+
   }),
   id: "DM",
   initial: "Prepare",
+
   states: {
     Prepare: {
       entry: ({ context }) => context.spstRef.send({ type: "PREPARE" }),
       on: { ASRTTS_READY: "WaitToStart" },
     },
     WaitToStart: {
-      on: { CLICK: "Greeting" },
+      on: { CLICK: "Decision" },
     },
-    Greeting: {
-      initial: "Prompt",
-      on: {
-        LISTEN_COMPLETE: [
-          {
-            target: "CheckGrammar",
-            guard: ({ context }) => !!context.lastResult,
-          },
-          { target: ".NoInput" },
-        ],
-      },
+
+// Initial decision (which Intent?)
+    Decision: {
+      //small greeting to let the user know the system is ready to start
+      initial: "Speak",
       states: {
-        Prompt: {
-          entry: { type: "spst.speak", params: { utterance: `Hello world!` } },
-          on: { SPEAK_COMPLETE: "Ask" },
-        },
-        NoInput: {
+         Speak: {
           entry: {
             type: "spst.speak",
-            params: { utterance: `I can't hear you!` },
+            params: { utterance: "Hi! How can I help you?" }
           },
-          on: { SPEAK_COMPLETE: "Ask" },
+          on: { SPEAK_COMPLETE: "Listen" },
         },
-        Ask: {
-          entry: { type: "spst.listen" },
+        Listen: {
+          entry: { type: "spst.listenNLU" },
           on: {
             RECOGNISED: {
-              actions: assign(({ event }) => {
-                return { lastResult: event.value };
+              actions: assign({
+                interpretation: ({ event }) => event.nluValue ?? null,
+                person: ({ event }) => getEntity(event.nluValue, "Person"),
+                day: ({ event }) => getEntity(event.nluValue, "Day"),
+                time: ({ event }) => getEntity(event.nluValue, "Time"),
+                wholeDay: ({ event }) =>
+                  event.nluValue?.entities.find(
+                    (e: Entity) => e.category === "wholeDay"
+                  )?.text,
               }),
             },
-            ASR_NOINPUT: {
-              actions: assign({ lastResult: null }),
+
+            LISTEN_COMPLETE: [
+              {
+                guard: ({ context }) =>
+                  context.interpretation?.topIntent === "WhoIs" &&
+                //checking for confidence (should be over 60%)
+                  getIntentConfidence(context.interpretation, "WhoIs") > 0.6,
+                target: "#DM.WhoIsPath",
+              },
+
+              {
+                guard: ({ context }) =>
+                  context.interpretation?.topIntent === "CreateMeeting" &&
+                  getIntentConfidence(context.interpretation, "CreateMeeting") > 0.6,
+                target: "#DM.CreateMeetingPath",
+              },
+
+              {
+                target: "InvalidAnswer",
+              },
+            ],
+          },
+        },
+        // state for invalid answers
+        InvalidAnswer: {
+          entry: {
+            type: "spst.speak",
+            params: { utterance: "I didn't understand. You can either ask about a famous person or create an appointment. Please try again." },
+          },
+          on: { SPEAK_COMPLETE: "Listen" },
+        },
+      },
+    },
+
+// If the system recognizes WhoIs
+    WhoIsPath: {
+      initial: "CheckPerson",
+      states: {
+
+        //checking if person was recognized
+        CheckPerson: {
+          always: [
+            {
+              guard: ({ context }) => context.person !== undefined,
+              target: "Answer"
             },
+            {
+              target: "AskPersonAgain"
+            }
+          ]
+        },
+
+        //asking again if person was not recognized
+        AskPersonAgain: {
+          entry: {
+            type: "spst.speak",
+            params: {
+              utterance: "I did not catch that name. Please tell me who you would like to know about."
+            }
+          },
+          on: { SPEAK_COMPLETE: "ListenPerson"}
+        },
+
+        //listening for person
+        ListenPerson: {
+          entry: { type: "spst.listenNLU" },
+          on: {
+            RECOGNISED: {
+              actions: assign({
+                person: ({ event }) => getEntity(event.nluValue, "Person")
+              })
+            },
+            LISTEN_COMPLETE: "CheckPerson"
+          }
+        },
+
+        Answer: {
+          entry: {
+            type: "spst.speak",
+            params: ({ context }) => ({
+              utterance: `${context.person} is a well-known public figure. But YOU are the real star!`
+            })
+          },
+          on: {
+            SPEAK_COMPLETE: "#DM.WaitToStart",
           },
         },
       },
     },
-    CheckGrammar: {
+
+// If the system recognizes CreateMeeting
+    CreateMeetingPath: {
+      initial: "CheckEntities",
+      states: {
+
+        CheckEntities: {
+
+          // printing to the console to check what the system recognizes
+          entry: ({ context }) => {
+            console.log("person:", context.person);
+            console.log("day:", context.day);
+            console.log("time:", context.time);
+            console.log("wholeDay:", context.wholeDay);
+          },
+          always: [
+            { guard: ({ context }) => !context.person, target: "AskPerson" },
+            { guard: ({ context }) => !context.day, target: "AskDay" },
+            { guard: ({ context }) => context.wholeDay === undefined && !context.time, target: "AskWholeDay" },
+            { guard: ({ context }) => context.wholeDay === false && !context.time, target: "AskTime" },
+            { target: "Confirm" },
+          ]
+        },
+
+        AskPerson: { 
+          entry: {
+            type: "spst.speak",
+            params: { utterance: "Who are you meeting with?" }
+          },
+          on: { SPEAK_COMPLETE: "ListenPerson" }
+        },
+
+        ListenPerson: {
+          entry: {
+            type: "spst.listenNLU"
+          },
+          on: {
+            RECOGNISED: {
+              actions: assign({
+                interpretation: ({event}) => event.nluValue ?? null,
+                person: ({event}) => getEntity(event.nluValue, "Person")
+              })
+            },
+            LISTEN_COMPLETE: "CheckEntities"
+          }
+        },
+
+        AskDay: { 
+          entry: {
+            type: "spst.speak",
+            params: { utterance: "On which day is your meeting?" }
+          },
+          on: { SPEAK_COMPLETE: "ListenDay" }
+        },
+
+        ListenDay: {
+          entry: {
+            type: "spst.listenNLU"
+          },
+          on: {
+            RECOGNISED: {
+              actions: assign({
+                day: ({event}) => getEntity(event.nluValue, "Day")
+              })
+            },
+            LISTEN_COMPLETE: "CheckEntities"
+          }
+        },
+
+        AskWholeDay: { 
+          entry: {
+            type: "spst.speak",
+            params: { utterance: "Will it take the whole day?" }
+          },
+          on: { SPEAK_COMPLETE: "ListenWholeDay" }
+        },
+
+        ListenWholeDay: {
+          entry: {
+            type: "spst.listenNLU"
+          },
+          on: {
+            RECOGNISED: {
+              actions: assign({
+                interpretation: ({event}) => event.nluValue ?? null,
+                wholeDay: ({event}) => getYesNo(event.nluValue)
+              })
+            },
+            LISTEN_COMPLETE: "CheckEntities"
+          }
+        },
+
+        AskTime: { // Azure thinks that days are also a time, retraining didn't fix that :/
+          entry: {
+            type: "spst.speak",
+            params: { utterance: "What time is your meeting?" }
+          },
+          on: { SPEAK_COMPLETE: "ListenTime" }
+        },
+
+        ListenTime: {
+          entry: {
+            type: "spst.listenNLU"
+          },
+          on: {
+            RECOGNISED: {
+              actions: assign({
+                time: ({event}) => getEntity(event.nluValue, "Time")
+              })
+            },
+            LISTEN_COMPLETE: "CheckEntities"
+          }
+        },
+
+        Confirm: { 
+          entry: {
+            type: "spst.speak",
+            params: ({context}) => ({
+              utterance: context.wholeDay
+              ? `Should I create a meeting with ${context.person} on ${context.day} for the whole day?`
+              : `Should I create a meeting with ${context.person} on ${context.day} at ${context.time}?`
+            })
+          },
+          on: { SPEAK_COMPLETE: "ListenConfirm" }
+        },
+
+        ListenConfirm: {
+          entry: {
+            type: "spst.listenNLU"
+          },
+          on: {
+            RECOGNISED: {
+              actions: assign({
+                confirmation: ({event}) => getYesNo(event.nluValue)
+              })
+            },
+            LISTEN_COMPLETE: [
+              {
+                guard: ({context}) => context.confirmation === true,
+                target: "#DM.Done"
+              },
+              {
+                guard: ({context}) => context.confirmation === false,
+                target: "#DM.Repeat"
+              },
+              {target: "Confirm"}
+            ]
+          },
+        },
+
+      },
+    },
+
+    // state in case the user aborts the process
+    Repeat: {
       entry: {
         type: "spst.speak",
-        params: ({ context }) => ({
-          utterance: `You just said: ${context.lastResult![0].utterance}. And it ${
-            isInGrammar(context.lastResult![0].utterance) ? "is" : "is not"
-          } in the grammar.`,
-        }),
+        params: { utterance: "Exiting. Have a nice day and click to try again!" },
       },
-      on: { SPEAK_COMPLETE: "Done" },
-    },
-    Done: {
       on: {
-        CLICK: "Greeting",
+        CLICK: "Decision",
+      },
+    },
+
+    Done: {
+      entry: { 
+        type: "spst.speak",
+        params: { utterance: "Your appointment has been created." },
+      },
+      on: {
+        CLICK: "Decision",
       },
     },
   },

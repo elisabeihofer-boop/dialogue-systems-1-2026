@@ -6,8 +6,8 @@
     "build": "tsc && vite build --base ./",
 
 2.  Use SSH to login to **mltgpu-2**.
-3.  Create a folder in `/srv/www/` with the same name as your gus-account, e.g. `gusxxxxxx`.
-4.  On your machince, build your app: `npm build`, this will produce a `dist` directory with a few files in it. (More information can be found in [Vite documentation](https://vitejs.dev/guide/build.html)). 
+3.  Create a folder inside `/srv/www/` path (first, `cd /srv/www/`) with the same name as your gus-account, e.g. `gusxxxxxx`.
+4.  On your machince, build your app: `npm run build`, this will produce a `dist` directory with a few files in it. (More information can be found in [Vite documentation](https://vitejs.dev/guide/build.html)). 
     - If you are getting errors, you might consider excluding files that you are not using `tsconfig.json` (i.e. `"exclude": ["src/dmParallel.ts", "src/dm2.ts"]`). You can also relax other TypeScript checks, e.g. `"noUnusedLocals": false`.
 5.  Copy the contents of this directory to your folder on the server:
     
